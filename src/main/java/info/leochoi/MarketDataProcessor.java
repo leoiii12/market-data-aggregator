@@ -42,14 +42,15 @@ public class MarketDataProcessor implements Disposable {
         new PriorityBlockingQueue<>(
             1024, Comparator.<PriorityToSymbolTuple>comparingLong(Tuple2::v1).reversed());
 
-    // *****
+    // **********
     // Source
-    // *****
-    marketDataPriorityProcessor.getPriorityToSymbolTupleObservable().subscribe(queue::add);
+    // **********
+    disposables.add(
+        marketDataPriorityProcessor.getPriorityToSymbolTupleObservable().subscribe(queue::add));
 
-    // *****
+    // **********
     // Rate Limit
-    // *****
+    // **********
     final Bucket bucket =
         Bucket4j.builder()
             .addLimit(
@@ -60,46 +61,48 @@ public class MarketDataProcessor implements Disposable {
                         Duration.ofSeconds(1))))
             .build();
 
-    Observable.fromIterable(
-            (Iterable<PriorityToSymbolTuple>)
-                () ->
-                    new Iterator<>() {
-                      @Override
-                      public boolean hasNext() {
-                        return true;
-                      }
-
-                      @Override
-                      public PriorityToSymbolTuple next() {
-                        try {
-                          final PriorityToSymbolTuple tuple = queue.take();
-                          bucket.asScheduler().consume(1);
-
-                          if ("A".equals(tuple.v2())) {
-                            logger.info("queue.size()=[{}], tuple=[{}].", queue.size(), tuple);
-                          }
-                          if (tuple.v1() > 1) {
-                            logger.info("tuple=[{}].", tuple);
+    disposables.add(
+        Observable.fromIterable(
+                (Iterable<PriorityToSymbolTuple>)
+                    () ->
+                        new Iterator<>() {
+                          @Override
+                          public boolean hasNext() {
+                            return true;
                           }
 
-                          return tuple;
-                        } catch (InterruptedException e) {
-                          throw new RuntimeException(e);
-                        }
-                      }
-                    })
-        .subscribeOn(Schedulers.newThread())
-        .subscribe(
-            tuple -> {
-              publishingSymbolSubject.onNext(tuple.v2());
-            });
+                          @Override
+                          public PriorityToSymbolTuple next() {
+                            try {
+                              final PriorityToSymbolTuple tuple = queue.take();
+                              bucket.asScheduler().consume(1);
 
-    // *****
+                              if ("A".equals(tuple.v2())) {
+                                logger.info("queue.size()=[{}], tuple=[{}].", queue.size(), tuple);
+                              }
+                              if (tuple.v1() > 1) {
+                                logger.info("tuple=[{}].", tuple);
+                              }
+
+                              return tuple;
+                            } catch (InterruptedException e) {
+                              throw new RuntimeException(e);
+                            }
+                          }
+                        })
+            .subscribeOn(Schedulers.newThread())
+            .subscribe(
+                tuple -> {
+                  publishingSymbolSubject.onNext(tuple.v2());
+                }));
+
+    // **********
     // Publish
-    // *****
-    Observable.wrap(publishingSymbolSubject)
-        .map(marketDataPriorityProcessor::getLatestQuote)
-        .subscribe(this::publishAggregatedMarketData);
+    // **********
+    disposables.add(
+        Observable.wrap(publishingSymbolSubject)
+            .map(marketDataPriorityProcessor::getLatestMarketData)
+            .subscribe(this::publishAggregatedMarketData));
   }
 
   public void onMessage(final @NotNull NewMarketDataMsg newMarketDataMsg) {
@@ -109,12 +112,12 @@ public class MarketDataProcessor implements Disposable {
   @VisibleForTesting
   public @NotNull Observable<MarketDataProtos.MarketData> getMarketDataObservable() {
     return Observable.wrap(publishingSymbolSubject)
-        .map(marketDataPriorityProcessor::getLatestQuote);
+        .map(marketDataPriorityProcessor::getLatestMarketData);
   }
 
   private void publishAggregatedMarketData(final @NotNull MarketDataProtos.MarketData marketData) {
     // TODO
-    System.out.println(marketData);
+    // System.out.println(marketData);
   }
 
   @Override

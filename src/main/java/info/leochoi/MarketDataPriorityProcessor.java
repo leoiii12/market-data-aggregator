@@ -19,6 +19,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jooq.lambda.tuple.Tuple2;
 
+/**
+ * This class throttles the source {@link MarketDataProtos.MarketData} events and provides
+ * observables methods for getting the results in a continuous manner. Priority (Count in the
+ * second) is also zipped with the result.
+ *
+ * <p>Higher Frequency --> Higher Priority
+ */
 public class MarketDataPriorityProcessor implements Disposable {
 
   private final ConcurrentHashMap<String, MarketDataProtos.MarketData> symbolToMarketDataMap =
@@ -31,7 +38,7 @@ public class MarketDataPriorityProcessor implements Disposable {
   private final List<Disposable> disposables = new ArrayList<>();
 
   public MarketDataPriorityProcessor(final @NonNull Scheduler scheduler) {
-    // Ensure each symbol will always have the latest market data when it is published
+    // 1. Ensure each symbol will always have the latest market data when it is published
     disposables.add(
         Observable.wrap(marketDataSubject)
             .subscribe(
@@ -39,21 +46,26 @@ public class MarketDataPriorityProcessor implements Disposable {
                   symbolToMarketDataMap.put(marketData.getSymbol(), marketData);
                 }));
 
-    // Ensure each symbol will not have more than one update per second
+    // 2. Ensure each symbol will not have more than one update per second
+    // However, if the symbol has more than one changes in the second, throttleLatest emits the last
+    // changes in the second at the beginning of the another second
+    //
     // Here also counts how many raw records are emitted in the corresponding window
-    // Tuple2<CountInTheWindow, MarketData>
+    // Tuple2<CountInTheSecond, MarketData>
     disposables.add(
         Observable.wrap(marketDataSubject)
             .groupBy(MarketDataProtos.MarketData::getSymbol)
             .subscribe(
                 g -> {
-                  final AtomicLong atomicLong = new AtomicLong(1);
+                  // Here is single-threaded. But AtomicLong is still being used now for latter easy
+                  // migrations to the multi-threaded env.
+                  final AtomicLong priority = new AtomicLong(1);
 
-                  // Adds the index
+                  // Adds the priority
                   final Observable<Tuple2<Long, MarketData>> tuple2Observable =
-                      g.map(md -> new Tuple2<>(atomicLong.getAndIncrement(), md)).share();
+                      g.map(md -> new Tuple2<>(priority.getAndIncrement(), md)).share();
 
-                  // Emits the value
+                  // Emits the tuple
                   final Disposable disposable1 =
                       tuple2Observable
                           .throttleLatest(
@@ -66,14 +78,14 @@ public class MarketDataPriorityProcessor implements Disposable {
                                   priorityToSymbolSubject.onNext(
                                       new PriorityToSymbolTuple(t.v1(), t.v2().getSymbol())));
 
-                  // Resets the priority after the window
+                  // Resets the priority after the second ends
                   final Disposable disposable2 =
                       tuple2Observable
                           .throttleLast(
                               MarketDataCoreProcessor_publishAggregatedMarketData_throttle_ms,
                               TimeUnit.MILLISECONDS,
                               scheduler)
-                          .subscribe(tuple2 -> atomicLong.set(1));
+                          .subscribe(tuple2 -> priority.set(1));
 
                   disposables.add(disposable1);
                   disposables.add(disposable2);
@@ -93,11 +105,27 @@ public class MarketDataPriorityProcessor implements Disposable {
     marketDataSubject.onNext(quote);
   }
 
+  /**
+   * This checks whether the symbol has been processed by this class {@link
+   * info.leochoi.MarketDataPriorityProcessor}. If the invoker is not using {@link
+   * MarketDataPriorityProcessor#getLatestMarketData(java.lang.String)}, then this method should be
+   * invoked first.
+   *
+   * @param symbol
+   * @return true --> processed, false --> never processed
+   */
   public boolean containsSymbol(@NotNull String symbol) {
     return symbolToMarketDataMap.containsKey(symbol);
   }
 
-  public @NotNull MarketDataProtos.MarketData getLatestQuote(@NotNull String symbol) {
+  /**
+   * This gets the latest {@link MarketDataProtos.MarketData} processed by this class {@link
+   * info.leochoi.MarketDataPriorityProcessor}.
+   *
+   * @param symbol
+   * @return the latest {@link MarketDataProtos.MarketData}
+   */
+  public @NotNull MarketDataProtos.MarketData getLatestMarketData(@NotNull String symbol) {
     if (!containsSymbol(symbol)) {
       throw new UnknownSymbolException(symbol);
     }

@@ -79,8 +79,8 @@ class MarketDataPriorityProcessorTest {
         2,
         q ->
             q.v1() == 1
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 3);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 3);
     dbxMarketDataTestObserver.assertValueCount(3);
 
     // ***********
@@ -94,14 +94,14 @@ class MarketDataPriorityProcessorTest {
         2,
         q ->
             q.v1() == 1
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 4);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 4);
     dbxMarketDataTestObserver.assertValueAt(
         3,
         q ->
             q.v1() == 2
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 4);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 4);
     dbxMarketDataTestObserver.assertValueCount(4);
 
     // ***********
@@ -114,8 +114,8 @@ class MarketDataPriorityProcessorTest {
         4,
         q ->
             q.v1() == 1
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 10);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 10);
 
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataPriorityProcessor.emitNewMarketData(getMarketData("DBX", 11)); // 1
@@ -124,8 +124,8 @@ class MarketDataPriorityProcessorTest {
         4,
         q ->
             q.v1() == 1
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 11);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 11);
 
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataPriorityProcessor.emitNewMarketData(getMarketData("DBX", 12)); // 2
@@ -134,8 +134,8 @@ class MarketDataPriorityProcessorTest {
         4,
         q ->
             q.v1() == 1
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 12);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 12);
 
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataPriorityProcessor.emitNewMarketData(getMarketData("DBX", 13)); // 3
@@ -152,8 +152,8 @@ class MarketDataPriorityProcessorTest {
         5,
         q ->
             q.v1() == 7
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
-                && marketDataPriorityProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 16);
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getSymbol().equals("DBX")
+                && marketDataPriorityProcessor.getLatestMarketData(q.v2()).getLast().getNanos() == 16);
     dbxMarketDataTestObserver.assertValueCount(6);
   }
 
