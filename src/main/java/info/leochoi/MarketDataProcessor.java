@@ -33,16 +33,6 @@ public class MarketDataProcessor implements Disposable {
   public MarketDataProcessor(final @NotNull Scheduler scheduler) {
     marketDataCoreProcessor = new MarketDataCoreProcessor(scheduler);
 
-    final PriorityBlockingQueue<Tuple2<Long, String>> priorityBlockingQueue =
-        new PriorityBlockingQueue<>();
-
-    marketDataCoreProcessor
-        .getPriorityToSymbolTuple2Observable()
-        .subscribe(
-            tuple2 -> {
-              priorityBlockingQueue.add(tuple2);
-            });
-
     marketDataCoreProcessor
         .getPriorityToSymbolTuple2Observable()
         .window(
