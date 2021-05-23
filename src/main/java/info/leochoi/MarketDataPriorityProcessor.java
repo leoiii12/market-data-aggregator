@@ -19,18 +19,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jooq.lambda.tuple.Tuple2;
 
-public class MarketDataCoreProcessor implements Disposable {
+public class MarketDataPriorityProcessor implements Disposable {
 
   private final ConcurrentHashMap<String, MarketDataProtos.MarketData> symbolToMarketDataMap =
       new ConcurrentHashMap<>();
 
   private final Subject<MarketDataProtos.MarketData> marketDataSubject = PublishSubject.create();
-  private final Subject<Tuple2<Long, String>> throttledSymbolSubject = PublishSubject.create();
+  private final Subject<PriorityToSymbolTuple> priorityToSymbolSubject = PublishSubject.create();
 
   private final AtomicBoolean isDisposed = new AtomicBoolean(false);
   private final List<Disposable> disposables = new ArrayList<>();
 
-  public MarketDataCoreProcessor(final @NonNull Scheduler scheduler) {
+  public MarketDataPriorityProcessor(final @NonNull Scheduler scheduler) {
     // Ensure each symbol will always have the latest market data when it is published
     disposables.add(
         Observable.wrap(marketDataSubject)
@@ -63,10 +63,10 @@ public class MarketDataCoreProcessor implements Disposable {
                               true)
                           .subscribe(
                               t ->
-                                  throttledSymbolSubject.onNext(
-                                      new Tuple2<>(t.v1(), t.v2().getSymbol())));
+                                  priorityToSymbolSubject.onNext(
+                                      new PriorityToSymbolTuple(t.v1(), t.v2().getSymbol())));
 
-                  // Resets the index after the window
+                  // Resets the priority after the window
                   final Disposable disposable2 =
                       tuple2Observable
                           .throttleLast(
@@ -85,8 +85,8 @@ public class MarketDataCoreProcessor implements Disposable {
     return Observable.wrap(marketDataSubject);
   }
 
-  public @NotNull Observable<Tuple2<Long, String>> getPriorityToSymbolTuple2Observable() {
-    return Observable.wrap(throttledSymbolSubject);
+  public @NotNull Observable<PriorityToSymbolTuple> getPriorityToSymbolTupleObservable() {
+    return Observable.wrap(priorityToSymbolSubject);
   }
 
   public void emitNewMarketData(@NonNull MarketDataProtos.MarketData quote) {

@@ -20,7 +20,7 @@ class MarketDataProcessorTest {
   void tearDown() {}
 
   @org.junit.jupiter.api.Test
-  void newMessage_NewMarketDataMsg_simple() {
+  void newMessage_NewMarketDataMsg_simple() throws InterruptedException {
     final TestScheduler testScheduler = new TestScheduler();
 
     final MarketDataProcessor marketDataProcessor = new MarketDataProcessor(testScheduler);
@@ -31,29 +31,46 @@ class MarketDataProcessorTest {
         Observable.wrap(marketDataObservable).test();
 
     // ***********
-    // Simple
+    // 1
     // ***********
-    testScheduler.advanceTimeTo(0, TimeUnit.MILLISECONDS);
     marketDataProcessor.onMessage(
         new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 0)));
-
-    testObserver.assertValueCount(1);
-
-    testScheduler.advanceTimeTo(200, TimeUnit.MILLISECONDS);
-    marketDataProcessor.onMessage(
-        new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 1)));
-
-    testObserver.assertValueCount(1);
-
-    testScheduler.advanceTimeTo(1000, TimeUnit.MILLISECONDS);
+    testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS);
+    Thread.sleep(1000);
 
     testObserver.assertValueAt(0, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 0);
+    testObserver.assertValueCount(1);
+
+    // ***********
+    // 1
+    // ***********
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 1)));
+    testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS);
+    Thread.sleep(1000);
+
     testObserver.assertValueAt(1, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 1);
     testObserver.assertValueCount(2);
+
+    // ***********
+    // 2
+    // ***********
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 2)));
+    testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
+    Thread.sleep(100);
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 3)));
+    testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS);
+    Thread.sleep(1000);
+
+    testObserver.assertValueAt(2, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 2);
+    testObserver.assertValueAt(3, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 3);
+    testObserver.assertValueCount(4);
   }
 
   @org.junit.jupiter.api.Test
-  void newMessage_NewMarketDataMsg_over() {
+  void newMessage_NewMarketDataMsg_priority() throws InterruptedException {
     final TestScheduler testScheduler = new TestScheduler();
 
     final MarketDataProcessor marketDataProcessor = new MarketDataProcessor(testScheduler);
@@ -63,31 +80,51 @@ class MarketDataProcessorTest {
     final TestObserver<MarketDataProtos.MarketData> testObserver =
         Observable.wrap(marketDataObservable).test();
 
-    final List<String> symbols_101 =
-        TestConstants.symbols.stream().limit(101).collect(Collectors.toList());
-    final List<String> symbols_100 =
+    final List<String> symbols_000_100 =
         TestConstants.symbols.stream().limit(100).collect(Collectors.toList());
+    final List<String> symbols_200_300 =
+        TestConstants.symbols.stream().skip(200).limit(100).collect(Collectors.toList());
+    final String symbol_0 = TestConstants.symbols.get(0);
+    final String symbol_1 = TestConstants.symbols.get(1);
 
     // ***********
-    // Take
+    // Priority
     // ***********
-    testScheduler.advanceTimeTo(0, TimeUnit.MILLISECONDS);
-
-    symbols_101.forEach(
+    symbols_000_100.forEach(
         symbol -> {
           marketDataProcessor.onMessage(
               new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol, 0)));
         });
 
-    testScheduler.advanceTimeTo(200, TimeUnit.MILLISECONDS);
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol_0, 1)));
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol_0, 2)));
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol_0, 3)));
+    marketDataProcessor.onMessage(
+        new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol_1, 1)));
 
-    for (int i = 0, mySymbolsSize = symbols_100.size(); i < mySymbolsSize; i++) {
-      String mySymbol = symbols_100.get(i);
-      testObserver.assertValueAt(
-          i++, q -> q.getSymbol().equals(mySymbol) && q.getLast().getNanos() == 0);
-    }
+    testScheduler.advanceTimeBy(200, TimeUnit.MILLISECONDS);
+    Thread.sleep(200);
+
+    symbols_200_300.forEach(
+        symbol -> {
+          marketDataProcessor.onMessage(
+              new MarketDataProcessor.NewMarketDataMsg(getMarketData(symbol, 1)));
+        });
 
     testObserver.assertValueCount(100);
+
+    testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS);
+    Thread.sleep(1000);
+
+    testObserver.assertValueCount(200);
+
+    testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS);
+    Thread.sleep(1000);
+
+    testObserver.assertValueCount(202);
   }
 
   private MarketData getMarketData(final @NotNull String symbol, final int i) {
