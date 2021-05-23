@@ -45,16 +45,16 @@ class MarketDataCoreProcessorTest {
   }
 
   @org.junit.jupiter.api.Test
-  void getThrottledMarketDataObservable() {
+  void getPriorityToSymbolTuple2Observable() {
     final TestScheduler testScheduler = new TestScheduler();
 
     final MarketDataCoreProcessor marketDataCoreProcessor =
         new MarketDataCoreProcessor(testScheduler);
-    final Observable<Tuple2<Long, MarketDataProtos.MarketData>> dbxQuoteObservable =
+    final Observable<Tuple2<Long, String>> dbxQuoteObservable =
         marketDataCoreProcessor
-            .getPriorityToMarketDataTuple2Observable()
-            .filter(g -> "DBX".equals(g.v2().getSymbol()));
-    final TestObserver<Tuple2<Long, MarketDataProtos.MarketData>> dbxMarketDataTestObserver =
+            .getPriorityToSymbolTuple2Observable()
+            .filter(g -> "DBX".equals(g.v2()));
+    final TestObserver<Tuple2<Long, String>> dbxMarketDataTestObserver =
         Observable.wrap(dbxQuoteObservable).test();
 
     // ***********
@@ -68,12 +68,7 @@ class MarketDataCoreProcessorTest {
     marketDataCoreProcessor.emitNewMarketData(getMarketData("DBX", 2)); // 2
     testScheduler.advanceTimeTo(1000, TimeUnit.MILLISECONDS);
 
-    dbxMarketDataTestObserver.assertValueAt(
-        0,
-        q -> q.v1() == 1 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 0);
-    dbxMarketDataTestObserver.assertValueAt(
-        1,
-        q -> q.v1() == 3 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 2);
+    dbxMarketDataTestObserver.assertValueCount(2);
 
     // ***********
     // Emits 3
@@ -83,7 +78,10 @@ class MarketDataCoreProcessorTest {
 
     dbxMarketDataTestObserver.assertValueAt(
         2,
-        q -> q.v1() == 1 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 3);
+        q ->
+            q.v1() == 1
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 3);
     dbxMarketDataTestObserver.assertValueCount(3);
 
     // ***********
@@ -95,10 +93,16 @@ class MarketDataCoreProcessorTest {
 
     dbxMarketDataTestObserver.assertValueAt(
         2,
-        q -> q.v1() == 1 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 3);
+        q ->
+            q.v1() == 1
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 4);
     dbxMarketDataTestObserver.assertValueAt(
         3,
-        q -> q.v1() == 2 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 4);
+        q ->
+            q.v1() == 2
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 4);
     dbxMarketDataTestObserver.assertValueCount(4);
 
     // ***********
@@ -106,10 +110,34 @@ class MarketDataCoreProcessorTest {
     // ***********
     testScheduler.advanceTimeTo(5000, TimeUnit.MILLISECONDS);
     marketDataCoreProcessor.emitNewMarketData(getMarketData("DBX", 10)); // 0
+
+    dbxMarketDataTestObserver.assertValueAt(
+        4,
+        q ->
+            q.v1() == 1
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 10);
+
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataCoreProcessor.emitNewMarketData(getMarketData("DBX", 11)); // 1
+
+    dbxMarketDataTestObserver.assertValueAt(
+        4,
+        q ->
+            q.v1() == 1
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 11);
+
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataCoreProcessor.emitNewMarketData(getMarketData("DBX", 12)); // 2
+
+    dbxMarketDataTestObserver.assertValueAt(
+        4,
+        q ->
+            q.v1() == 1
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 12);
+
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
     marketDataCoreProcessor.emitNewMarketData(getMarketData("DBX", 13)); // 3
     testScheduler.advanceTimeBy(100, TimeUnit.MILLISECONDS);
@@ -122,11 +150,11 @@ class MarketDataCoreProcessorTest {
     testScheduler.advanceTimeTo(6000, TimeUnit.MILLISECONDS);
 
     dbxMarketDataTestObserver.assertValueAt(
-        4,
-        q -> q.v1() == 1 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 10);
-    dbxMarketDataTestObserver.assertValueAt(
         5,
-        q -> q.v1() == 7 && q.v2().getSymbol().equals("DBX") && q.v2().getLast().getNanos() == 16);
+        q ->
+            q.v1() == 7
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getSymbol().equals("DBX")
+                && marketDataCoreProcessor.getLatestQuote(q.v2()).getLast().getNanos() == 16);
     dbxMarketDataTestObserver.assertValueCount(6);
   }
 

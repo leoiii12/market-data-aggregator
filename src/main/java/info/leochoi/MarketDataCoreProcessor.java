@@ -25,8 +25,7 @@ public class MarketDataCoreProcessor implements Disposable {
       new ConcurrentHashMap<>();
 
   private final Subject<MarketDataProtos.MarketData> marketDataSubject = PublishSubject.create();
-  private final Subject<Tuple2<Long, MarketDataProtos.MarketData>> throttledMarketDataSubject =
-      PublishSubject.create();
+  private final Subject<Tuple2<Long, String>> throttledSymbolSubject = PublishSubject.create();
 
   private final AtomicBoolean isDisposed = new AtomicBoolean(false);
   private final List<Disposable> disposables = new ArrayList<>();
@@ -57,13 +56,23 @@ public class MarketDataCoreProcessor implements Disposable {
                   // Emits the value
                   final Disposable disposable1 =
                       tuple2Observable
-                          .throttleLatest(MarketDataCoreProcessor_publishAggregatedMarketData_throttle_ms, TimeUnit.MILLISECONDS, scheduler, true)
-                          .subscribe(throttledMarketDataSubject::onNext);
+                          .throttleLatest(
+                              MarketDataCoreProcessor_publishAggregatedMarketData_throttle_ms,
+                              TimeUnit.MILLISECONDS,
+                              scheduler,
+                              true)
+                          .subscribe(
+                              t ->
+                                  throttledSymbolSubject.onNext(
+                                      new Tuple2<>(t.v1(), t.v2().getSymbol())));
 
                   // Resets the index after the window
                   final Disposable disposable2 =
                       tuple2Observable
-                          .throttleLast(MarketDataCoreProcessor_publishAggregatedMarketData_throttle_ms, TimeUnit.MILLISECONDS, scheduler)
+                          .throttleLast(
+                              MarketDataCoreProcessor_publishAggregatedMarketData_throttle_ms,
+                              TimeUnit.MILLISECONDS,
+                              scheduler)
                           .subscribe(tuple2 -> atomicLong.set(1));
 
                   disposables.add(disposable1);
@@ -76,10 +85,8 @@ public class MarketDataCoreProcessor implements Disposable {
     return Observable.wrap(marketDataSubject);
   }
 
-  /** @return Tuple2<Priority, MarketData> */
-  public @NotNull Observable<Tuple2<Long, MarketDataProtos.MarketData>>
-      getPriorityToMarketDataTuple2Observable() {
-    return Observable.wrap(throttledMarketDataSubject);
+  public @NotNull Observable<Tuple2<Long, String>> getPriorityToSymbolTuple2Observable() {
+    return Observable.wrap(throttledSymbolSubject);
   }
 
   public void emitNewMarketData(@NonNull MarketDataProtos.MarketData quote) {

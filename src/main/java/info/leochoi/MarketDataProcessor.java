@@ -11,6 +11,7 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jetbrains.annotations.NotNull;
@@ -32,35 +33,44 @@ public class MarketDataProcessor implements Disposable {
   public MarketDataProcessor(final @NotNull Scheduler scheduler) {
     marketDataCoreProcessor = new MarketDataCoreProcessor(scheduler);
 
-    final Disposable takeDisposable =
-        marketDataCoreProcessor
-            .getPriorityToMarketDataTuple2Observable()
-            .window(MarketDataPublisher_publishAggregatedMarketData_rateLimit_ms, TimeUnit.MILLISECONDS, scheduler)
-            .subscribe(
-                tuple2Observable -> {
-                  final Observable<Tuple2<Long, MarketData>> observable =
-                      tuple2Observable.replay().autoConnect();
+    final PriorityBlockingQueue<Tuple2<Long, String>> priorityBlockingQueue =
+        new PriorityBlockingQueue<>();
 
-                  observable
-                      .take(MarketDataPublisher_publishAggregatedMarketData_rateLimit_count)
-                      .subscribe(
-                          tuple2 -> {
-                            marketDataSubject.onNext(tuple2.v2());
-                          });
+    marketDataCoreProcessor
+        .getPriorityToSymbolTuple2Observable()
+        .subscribe(
+            tuple2 -> {
+              priorityBlockingQueue.add(tuple2);
+            });
 
-                  observable
-                      .skip(MarketDataPublisher_publishAggregatedMarketData_rateLimit_count)
-                      .subscribe(
-                          tuple2 -> {
-                            logger.warn("Unhandled. tuple2=[{}].", tuple2);
-                          });
-                });
+    marketDataCoreProcessor
+        .getPriorityToSymbolTuple2Observable()
+        .window(
+            MarketDataPublisher_publishAggregatedMarketData_rateLimit_ms,
+            TimeUnit.MILLISECONDS,
+            scheduler)
+        .subscribe(
+            tuple2Observable -> {
+              final Observable<Tuple2<Long, String>> observable =
+                  tuple2Observable.replay().autoConnect();
 
-    final Disposable publishAggregatedMarketDataDisposable =
-        Observable.wrap(marketDataSubject).subscribe(this::publishAggregatedMarketData);
+              observable
+                  .take(MarketDataPublisher_publishAggregatedMarketData_rateLimit_count)
+                  .subscribe(
+                      tuple2 -> {
+                        marketDataSubject.onNext(
+                            marketDataCoreProcessor.getLatestQuote(tuple2.v2()));
+                      });
 
-    disposables.add(takeDisposable);
-    disposables.add(publishAggregatedMarketDataDisposable);
+              observable
+                  .skip(MarketDataPublisher_publishAggregatedMarketData_rateLimit_count)
+                  .subscribe(
+                      tuple2 -> {
+                        logger.warn("Unhandled. tuple2=[{}].", tuple2);
+                      });
+            });
+
+    Observable.wrap(marketDataSubject).subscribe(this::publishAggregatedMarketData);
   }
 
   public void onMessage(final @NotNull NewMarketDataMsg newMarketDataMsg) {
@@ -74,7 +84,7 @@ public class MarketDataProcessor implements Disposable {
 
   private void publishAggregatedMarketData(final @NotNull MarketDataProtos.MarketData marketData) {
     // TODO
-     System.out.println(marketData);
+    System.out.println(marketData);
   }
 
   @Override

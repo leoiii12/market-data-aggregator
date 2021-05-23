@@ -20,7 +20,7 @@ class MarketDataProcessorTest {
   void tearDown() {}
 
   @org.junit.jupiter.api.Test
-  void emitNewMarketData_simple() {
+  void newMessage_NewMarketDataMsg_simple() {
     final TestScheduler testScheduler = new TestScheduler();
 
     final MarketDataProcessor marketDataProcessor = new MarketDataProcessor(testScheduler);
@@ -37,24 +37,23 @@ class MarketDataProcessorTest {
     marketDataProcessor.onMessage(
         new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 0)));
 
-    testObserver.assertValueAt(0, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 0);
     testObserver.assertValueCount(1);
 
     testScheduler.advanceTimeTo(200, TimeUnit.MILLISECONDS);
     marketDataProcessor.onMessage(
         new MarketDataProcessor.NewMarketDataMsg(getMarketData("DBX", 1)));
 
-    testObserver.assertValueAt(0, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 0);
     testObserver.assertValueCount(1);
 
     testScheduler.advanceTimeTo(1000, TimeUnit.MILLISECONDS);
 
     testObserver.assertValueAt(0, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 0);
+    testObserver.assertValueAt(1, q -> q.getSymbol().equals("DBX") && q.getLast().getNanos() == 1);
     testObserver.assertValueCount(2);
   }
 
   @org.junit.jupiter.api.Test
-  void emitNewMarketData_over() {
+  void newMessage_NewMarketDataMsg_over() {
     final TestScheduler testScheduler = new TestScheduler();
 
     final MarketDataProcessor marketDataProcessor = new MarketDataProcessor(testScheduler);
